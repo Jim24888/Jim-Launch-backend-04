@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>腾讯广告直玩组件接入原型演示</title>
+    <style>
+        /* 基础与布局样式 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f6f8; margin: 0; display: flex; height: 100vh; overflow: hidden;}
+        .sidebar { width: 200px; background-color: #2b354b; color: white; display: flex; flex-direction: column; }
+        .sidebar .menu-item { padding: 15px 20px; cursor: pointer; border-bottom: 1px solid #3c4860; color: #a6b1c2; transition: all 0.2s;}
+        .sidebar .menu-item:hover { color: #fff; background-color: #35405a;}
+        .sidebar .menu-item.active { background-color: #1e88e5; border-left: 4px solid #fff; color: #fff;}
+        .main-content { flex-grow: 1; padding: 20px 30px; overflow-y: auto; background-color: #fff; margin: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative;}
+        
+        .form-row { display: flex; align-items: flex-start; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px dashed #eee; }
+        .form-row:last-child { border-bottom: none; }
+        .form-label { width: 140px; text-align: right; margin-right: 20px; font-weight: 500; color: #333; line-height: 32px;}
+        .form-value { flex-grow: 1; line-height: 32px;}
+        
+        /* 表格区域样式 (多账号) */
+        .section-title { margin-top: 10px; margin-bottom: 20px; font-size: 18px; color: #333; border-left: 4px solid #1e88e5; padding-left: 12px; font-weight: 600;}
+        .table-container { border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; margin-top: 10px;}
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background-color: #f8f9fa; text-align: left; padding: 12px; border-bottom: 1px solid #e0e0e0; color: #555; font-weight: 500; font-size: 14px;}
+        .data-table td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: middle;}
+        
+        /* 按钮与状态样式 */
+        .btn { padding: 6px 14px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;}
+        .btn-primary { background-color: #1e88e5; color: white; }
+        .btn-primary:hover { background-color: #1565c0; }
+        .btn-outline { border: 1px solid #d9d9d9; background-color: #fff; color: #666;}
+        .btn-outline:hover { border-color: #1e88e5; color: #1e88e5; }
+        .btn-config { background-color: #1890ff; color: white; font-weight: 500; }
+        .btn-config.off { background-color: #f5f5f5; color: #888; border: 1px solid #d9d9d9; font-weight: normal;}
+
+        /* 开关 (Toggle Switch) 样式 */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; vertical-align: middle;}
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.2);}
+        input:checked + .slider { background-color: #1e88e5; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* 全局弹窗 (Modal) 样式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal-box { background: #fff; border-radius: 8px; width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; animation: modalFadeIn 0.2s ease-out; }
+        @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background-color: #fcfcfc;}
+        .modal-header h3 { margin: 0; font-size: 16px; color: #333; }
+        .modal-close { cursor: pointer; color: #999; font-size: 20px; line-height: 1; transition: color 0.2s;}
+        .modal-close:hover { color: #333; }
+        
+        .modal-body { padding: 20px 24px; }
+        
+        /* 弹窗内的布局组 */
+        .control-group { display: flex; align-items: center; margin-bottom: 20px; }
+        .control-label { width: 90px; font-weight: 500; font-size: 14px; color: #333;}
+        .control-content { display: flex; align-items: center; gap: 20px;}
+        
+        .radio-label { display: flex; align-items: center; cursor: pointer; font-size: 14px; color: #555; gap: 6px;}
+        .radio-label input[type="radio"] { margin: 0; cursor: pointer; accent-color: #1e88e5; width: 16px; height: 16px;}
+
+        /* 动态配置区域 (共用) */
+        .config-area { min-height: 80px; background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 16px; transition: all 0.3s; margin-top: 10px;}
+        .empty-tip { color: #999; text-align: center; font-size: 13px; margin-top: 15px; }
+        .hint-box { background-color: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; padding: 12px; border-radius: 4px; font-size: 13px; display: flex; align-items: center; gap: 8px;}
+        
+        .input-group { display: flex; flex-direction: column; gap: 8px;}
+        .input-group label { font-size: 13px; color: #555; font-weight: 500; line-height: 1.2;}
+        .input-group label span.required { color: #e11d48; margin-left: 4px; }
+        .input-text { padding: 8px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box;}
+        .input-text:focus { border-color: #1e88e5; box-shadow: 0 0 0 2px rgba(30,136,229,0.1);}
+        .char-count { font-size: 12px; color: #999; text-align: right; margin-top: 4px; line-height: 1;}
+        .char-count.warning { color: #e11d48; }
+        
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 12px; background: #fafafa;}
+        
+        /* 视图切换 */
+        .view-section { display: none; animation: fadeIn 0.3s ease; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* 单账号专有表单样式模拟 */
+        .mock-playable-form { display: flex; flex-direction: column; gap: 15px; font-size: 13px;}
+        .mock-row { display: flex; align-items: center;}
+        .mock-label { width: 120px; color: #666; }
+        .mock-label span { color: #e11d48; margin-right: 4px;}
+        .mock-input { flex: 1; display: flex; align-items: center; gap: 15px;}
+        .mock-list-box { border: 1px solid #d9d9d9; border-radius: 4px; padding: 10px; background: #fff; max-height: 120px; overflow-y: auto;}
+        .mock-tag { display: inline-block; background: #f5f5f5; border: 1px solid #e8e8e8; padding: 2px 8px; border-radius: 4px; margin: 0 4px 4px 0; font-size: 12px; color: #555;}
+
+        /* 悬浮拖动文档框样式 */
+        #doc-widget {
+            position: fixed; right: 20px; bottom: 20px; width: 400px; background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 9999; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e2e8f0;
+        }
+        #doc-header { padding: 12px 16px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; cursor: move; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #334155; user-select: none; }
+        #doc-toggle { cursor: pointer; color: #64748b;}
+        #doc-content { padding: 16px; max-height: 500px; overflow-y: auto; font-size: 13px; line-height: 1.6; color: #475569; }
+        .doc-section { margin-bottom: 14px; }
+        .doc-title { font-weight: 600; color: #0f172a; margin-bottom: 4px; font-size: 14px;}
+        code { background: #f1f5f9; padding: 2px 4px; border-radius: 3px; font-family: monospace; color: #e11d48;}
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="menu-item" id="menu-single" onclick="switchRoute('single')">单账号上计划</div>
+        <div class="menu-item active" id="menu-multi" onclick="switchRoute('multi')">多账号计划3.0</div>
+        <div class="menu-item">仓库</div>
+        <div class="menu-item">报表</div>
+    </div>
+
+    <div class="main-content">
+        
+        <div id="view-single" class="view-section">
+            <h3 class="section-title">单账号上计划</h3>
+            
+            <div style="max-width: 800px;">
+                <div class="form-row">
+                    <div class="form-label">* 视频号:</div>
+                    <div class="form-value">
+                        <select class="input-text" style="width: 300px;">
+                            <option>🎑 圣峰动画</option>
+                        </select>
+                        <button class="btn btn-primary" style="margin-left: 10px;">同步</button>
+                    </div>
+                </div>
+
+                <div class="form-row" style="background-color: #fcfcfc; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                    <div class="form-label" style="font-weight: 600;">小游戏试玩页/直玩页:</div>
+                    <div class="form-value">
+                        
+                        <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 20px;">
+                            <span style="color: #666; font-size: 13px;">选择类型:</span>
+                            <label class="radio-label">
+                                <input type="radio" name="singleCompType" value="playable" onchange="renderSingleConfigArea()"> 小游戏试玩页
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="singleCompType" value="direct" onchange="renderSingleConfigArea()"> 小游戏直玩页
+                            </label>
+                        </div>
+
+                        <div id="singleStatusControl" style="margin-bottom: 10px; display: none; align-items: center; gap: 20px;">
+                            <span style="color: #666; font-size: 13px;">试玩页状态:</span>
+                            <label class="switch">
+                                <input type="checkbox" id="singleCompToggle" onchange="renderSingleConfigArea()">
+                                <span class="slider round"></span>
+                            </label>
+                            <span id="singleStatusText" style="font-size: 13px; color: #888;">已关闭</span>
+                        </div>
+
+                        <div id="singleConfigArea" class="config-area">
+                            <div class="empty-tip">请先选择类型</div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-label"></div>
+                    <div class="form-value" style="margin-top: 20px;">
+                        <button class="btn btn-primary">更新草稿箱</button>
+                        <button class="btn btn-primary" style="margin-left: 10px;">下一步</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-multi" class="view-section active">
+            <h3 class="section-title">多账号设置</h3>
+            
+            <div class="form-row">
+                <div class="form-label">推广目标:</div>
+                <div class="form-value">
+                    <button class="btn btn-primary" style="background-color: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff;">小游戏推广</button>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-label">* 小游戏id:</div>
+                <div class="form-value" style="color: #666; font-size: 14px;">
+                     🎮 永远的蔚蓝星球 (wxd704b6fcc8ba8e9e)
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th width="5%"></th>
+                            <th width="20%">媒体账号</th>
+                            <th width="45%">品牌形象跳转</th>
+                            <th width="30%">小游戏试玩页/直玩页</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="checkbox" checked></td>
+                            <td>56333133</td>
+                            <td>
+                                 <button class="btn btn-outline">品牌形象</button>
+                                 <button class="btn btn-primary">视频号</button>
+                            </td>
+                            <td>
+                                <button id="mainRowConfigBtn" class="btn btn-config off" onclick="openModal()">配置(未配置)</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="modal-overlay" id="configModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>小游戏试玩页/直玩页 (多账号批量)</h3>
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                
+                <div class="control-group">
+                    <div class="control-label">类型</div>
+                    <div class="control-content">
+                        <label class="radio-label">
+                            <input type="radio" name="compType" value="playable" onchange="renderMultiConfigArea()"> 小游戏试玩页
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="compType" value="direct" onchange="renderMultiConfigArea()"> 小游戏直玩页
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-group" id="multiStatusControl" style="display: none;">
+                    <div class="control-label">试玩页状态</div>
+                    <div class="control-content">
+                        <label class="switch">
+                            <input type="checkbox" id="compStatusToggle" onchange="renderMultiConfigArea()">
+                            <span class="slider round"></span>
+                        </label>
+                        <span id="compStatusText" style="font-size: 13px; color: #888;">已关闭</span>
+                    </div>
+                </div>
+
+                <div class="config-area" id="multiConfigArea">
+                    </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveMultiConfiguration()">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="doc-widget">
+        <div id="doc-header">
+            <span>📝 功能说明与 API 规范</span>
+            <span id="doc-toggle" onclick="toggleDocContent()">▼</span>
+        </div>
+        <div id="doc-content">
+            <div class="doc-section">
+                <div class="doc-title">一、 适用范围</div>
+                • 仅当广告计划的推广目标为“小游戏推广”时，才展示此配置模块。
+            </div>
+            <div class="doc-section">
+                <div class="doc-title">二、 交互视图与 UI 规范</div>
+                • <b>单账号上计划（内联模式）：</b> 采用页面内联平铺展开的形式。选择配置项后，直接在下方动态渲染对应的表单字段，不产生额外弹窗，保证填写的流畅度。<br>
+                • <b>多账号计划 3.0（弹窗模式）：</b> 采用“按钮触发 + 模态框（Modal）”交互。外部表格的按钮需直观反映当前配置结果：<br>
+                &nbsp;&nbsp;- 未配置：灰底，文字 <code>配置(未配置)</code><br>
+                &nbsp;&nbsp;- 选试玩且开启：蓝底，文字 <code>配置(试玩:已开启)</code><br>
+                &nbsp;&nbsp;- 选试玩且关闭：灰底，文字 <code>配置(试玩:已关闭)</code><br>
+                &nbsp;&nbsp;- 选直玩：蓝底，文字 <code>配置(直玩:已配)</code>
+            </div>
+            <div class="doc-section">
+                <div class="doc-title">三、 核心业务交互逻辑</div>
+                • <b>选择「试玩页」：</b> 将联动显示“试玩页状态”（开启/关闭）开关。开启时展示完整的试玩页素材表单；关闭时隐藏表单内容。<br>
+                • <b>选择「直玩页」：</b> <b>隐藏状态开关</b>（默认选中即代表使用），直接展示“直玩页引导文案”文本输入框。
+            </div>
+            <div class="doc-section">
+                <div class="doc-title">四、 API 字段与校验规范</div>
+                • <b>直玩文案限制：</b> 对应底层接口字段 <code>wxgame_direct_page_description</code>。前端强制校验文本框输入为 <b>20个字符以内</b>。需提供实时的字数统计，超出则标红并阻断提交。<br>
+                • <b>组件停用逻辑：</b> 若用户对已有计划进行编辑，从“直玩页”切换回“试玩页（关闭）”或完全取消配置时，前端在组装 Payload 时需将原直玩组件对象的 <code>is_deleted</code> 字段传 <code>true</code>，以通知媒体端卸载该组件。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================== 路由切换逻辑 ==========================
+        function switchRoute(route) {
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('menu-' + route).classList.add('active');
+            document.getElementById('view-' + route).classList.add('active');
+        }
+
+        // ========================== 单账号上计划 (内联逻辑) ==========================
+        let singleAppState = {
+            directText: ''
+        };
+
+        function renderSingleConfigArea() {
+            const currentTypeElement = document.querySelector('input[name="singleCompType"]:checked');
+            const currentType = currentTypeElement ? currentTypeElement.value : '';
+            const statusControl = document.getElementById('singleStatusControl');
+            const isEnabled = document.getElementById('singleCompToggle').checked;
+            
+            const statusText = document.getElementById('singleStatusText');
+            statusText.innerText = isEnabled ? '已开启' : '已关闭';
+            statusText.style.color = isEnabled ? '#1e88e5' : '#888';
+
+            const configArea = document.getElementById('singleConfigArea');
+
+            if (!currentType) {
+                statusControl.style.display = 'none';
+                configArea.innerHTML = '<div class="empty-tip">请先选择类型</div>';
+                return;
+            }
+
+            if (currentType === 'playable') {
+                statusControl.style.display = 'flex'; // 显示开关
+                if (!isEnabled) {
+                    configArea.innerHTML = '<div class="empty-tip">试玩页已关闭。</div>';
+                } else {
+                    // 模拟单账号截图中的试玩复杂表单
+                    configArea.innerHTML = `
+                        <div class="mock-playable-form">
+                            <div class="mock-row">
+                                <div class="mock-label"><span>*</span>试玩页触发类型:</div>
+                                <div class="mock-input">
+                                    <label><input type="checkbox" checked> 客户交互</label>
+                                    <label><input type="checkbox"> 引导完成</label>
+                                </div>
+                            </div>
+                            <div class="mock-row">
+                                <div class="mock-label"><span>*</span>试玩页触发文案:</div>
+                                <div class="mock-input">
+                                    <select class="input-text" style="width:200px;"><option>现在试玩</option></select>
+                                </div>
+                            </div>
+                            <div class="mock-row" style="align-items: flex-start;">
+                                <div class="mock-label"><span>*</span>试玩页:</div>
+                                <div class="mock-input mock-list-box" style="flex: 1;">
+                                    <span class="mock-tag">20260403-原生塔防射击(森林遗迹) ×</span>
+                                    <span class="mock-tag">20260403-原生塔防射击(冰窟洞穴) ×</span>
+                                    <span class="mock-tag">20260327-蔚蓝原生塔防射击(海边沙滩) ×</span>
+                                    <span class="mock-tag" style="background:#fff; border:1px dashed #ccc; color:#888; cursor:pointer;">+ 添加试玩页</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (currentType === 'direct') {
+                statusControl.style.display = 'none'; // 隐藏开关
+                configArea.innerHTML = `
+                    <div class="input-group" style="max-width: 400px;">
+                        <label>直玩按钮引导文案 <span class="required">*</span></label>
+                        <input type="text" class="input-text" placeholder="例如：免下载直接玩" maxlength="20" oninput="updateSingleCharCount(this)" value="${singleAppState.directText || ''}">
+                        <div class="char-count">已输入：<span id="singleCharNum">${(singleAppState.directText || '').length}</span> / 20</div>
+                    </div>
+                `;
+            }
+        }
+
+        window.updateSingleCharCount = function(input) {
+            singleAppState.directText = input.value;
+            const countSpan = document.getElementById('singleCharNum');
+            const length = input.value.length;
+            countSpan.innerText = length;
+            if(length >= 20) countSpan.parentElement.classList.add('warning');
+            else countSpan.parentElement.classList.remove('warning');
+        }
+
+
+        // ========================== 多账号设置 (Modal逻辑) ==========================
+        let appState = { type: '', enabled: false, directText: '' };
+        let tempState = {}; 
+
+        const modal = document.getElementById('configModal');
+        const multiConfigArea = document.getElementById('multiConfigArea');
+        const mainRowBtn = document.getElementById('mainRowConfigBtn');
+
+        function openModal() {
+            tempState = { ...appState };
+            document.querySelectorAll('input[name="compType"]').forEach(radio => { radio.checked = (radio.value === tempState.type); });
+            document.getElementById('compStatusToggle').checked = tempState.enabled;
+            renderMultiConfigArea();
+            modal.classList.add('active');
+        }
+
+        function closeModal() { modal.classList.remove('active'); }
+
+        function renderMultiConfigArea() {
+            const currentTypeElement = document.querySelector('input[name="compType"]:checked');
+            const currentType = currentTypeElement ? currentTypeElement.value : '';
+            const statusControl = document.getElementById('multiStatusControl');
+            const isEnabled = document.getElementById('compStatusToggle').checked;
+            
+            const statusText = document.getElementById('compStatusText');
+            statusText.innerText = isEnabled ? '已开启' : '已关闭';
+            statusText.style.color = isEnabled ? '#1e88e5' : '#888';
+
+            tempState.type = currentType;
+            tempState.enabled = isEnabled;
+
+            if (!currentType) {
+                statusControl.style.display = 'none';
+                multiConfigArea.innerHTML = '<div class="empty-tip">请先在上方选择“类型”</div>'; 
+                return;
+            }
+            
+            if (currentType === 'playable') {
+                statusControl.style.display = 'flex'; // 只有试玩页才显示开关
+                if (!isEnabled) {
+                    multiConfigArea.innerHTML = '<div class="empty-tip">试玩页已关闭，暂无配置内容。</div>'; 
+                } else {
+                    multiConfigArea.innerHTML = `
+                        <div class="hint-box">
+                            <span style="font-size: 16px;">ℹ️</span> 多账号模式下，试玩页详细素材选择请在列表项外层或单独页签进行，此处仅作批量类型指定。
+                        </div>
+                    `;
+                }
+            } else if (currentType === 'direct') {
+                statusControl.style.display = 'none'; // 直玩页隐藏开关
+                multiConfigArea.innerHTML = `
+                    <div class="input-group">
+                        <label>直玩页引导文案 <span class="required">*</span></label>
+                        <input type="text" id="multiDirectTextInput" class="input-text" placeholder="例如：免下载直接玩" maxlength="20" oninput="updateMultiCharCount(this)" value="${tempState.directText || ''}">
+                        <div class="char-count">已输入：<span id="multiCharNum">${(tempState.directText || '').length}</span> / 20</div>
+                    </div>
+                `;
+            }
+        }
+
+        window.updateMultiCharCount = function(input) {
+            tempState.directText = input.value;
+            const countSpan = document.getElementById('multiCharNum');
+            const length = input.value.length;
+            countSpan.innerText = length;
+            if(length >= 20) countSpan.parentElement.classList.add('warning');
+            else countSpan.parentElement.classList.remove('warning');
+        }
+
+        function saveMultiConfiguration() {
+            if (tempState.type === 'playable' && tempState.enabled) {
+                // 试玩开启状态下的额外校验 (如有)
+            } else if (tempState.type === 'direct') {
+                 if (!tempState.directText || tempState.directText.trim() === '') { 
+                     alert('请输入直玩页引导文案！'); return; 
+                 }
+            }
+
+            appState = { ...tempState };
+            
+            if (appState.type === '') {
+                mainRowBtn.className = 'btn btn-config off'; mainRowBtn.innerText = `配置(未配置)`;
+            } else if (appState.type === 'playable') {
+                if (appState.enabled) {
+                    mainRowBtn.className = 'btn btn-config'; mainRowBtn.innerText = `配置(试玩:已开启)`;
+                } else {
+                    mainRowBtn.className = 'btn btn-config off'; mainRowBtn.innerText = `配置(试玩:已关闭)`;
+                }
+            } else if (appState.type === 'direct') {
+                mainRowBtn.className = 'btn btn-config'; mainRowBtn.innerText = `配置(直玩:已配)`;
+            }
+            closeModal();
+        }
+
+        // ========================== 拖拽 Widget 逻辑 ==========================
+        const widget = document.getElementById('doc-widget');
+        const header = document.getElementById('doc-header');
+        let isDragging = false; let startX, startY, initialLeft, initialTop;
+
+        header.addEventListener('mousedown', (e) => {
+            isDragging = true; startX = e.clientX; startY = e.clientY;
+            const rect = widget.getBoundingClientRect();
+            widget.style.left = rect.left + 'px'; widget.style.top = rect.top + 'px';
+            widget.style.right = 'auto'; widget.style.bottom = 'auto';
+            initialLeft = rect.left; initialTop = rect.top;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            widget.style.left = (initialLeft + e.clientX - startX) + 'px';
+            widget.style.top = (initialTop + e.clientY - startY) + 'px';
+        });
+        document.addEventListener('mouseup', () => { isDragging = false; });
+
+        function toggleDocContent() {
+            const content = document.getElementById('doc-content');
+            const toggleIcon = document.getElementById('doc-toggle');
+            content.classList.toggle('hidden');
+            toggleIcon.innerText = content.classList.contains('hidden') ? '▲' : '▼';
+        }
+
+        // 默认初始化渲染一下多账号弹窗内的空状态，虽然未显示
+        renderMultiConfigArea();
+    </script>
+</body>
+</html>
